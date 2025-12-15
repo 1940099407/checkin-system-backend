@@ -1,0 +1,23 @@
+# 服务器配置
+server:
+  port: 8080 # 后端接口端口
+  servlet:
+    context-path: /api # 接口前缀，所有接口需加/api
+
+# 数据库配置
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/checkin_system?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+    username: root # 你的MySQL用户名
+    password: root # 你的MySQL密码
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+# MyBatis-Plus配置
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true # 下划线转驼峰
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl # 打印SQL日志（开发阶段用）
+  global-config:
+    db-config:
+      id-type: auto # 主键自增
+  mapper-locations: classpath:mapper/**/*.xml # Mapper.xml文件路径
