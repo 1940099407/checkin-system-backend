@@ -9,11 +9,12 @@ spring:
   datasource:
     url: jdbc:mysql://localhost:3306/checkin_system?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
     username: root # 你的MySQL用户名
-    password: root # 你的MySQL密码
+    password: Crp.1234 # 你的MySQL密码
     driver-class-name: com.mysql.cj.jdbc.Driver
 
 # MyBatis-Plus配置
 mybatis-plus:
+  type-aliases-package: com.checkin.entity # 明确实体类所在包（关键）
   configuration:
     map-underscore-to-camel-case: true # 下划线转驼峰
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl # 打印SQL日志（开发阶段用）
