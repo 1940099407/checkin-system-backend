@@ -22,3 +22,8 @@ mybatis-plus:
     db-config:
       id-type: auto # 主键自增
   mapper-locations: classpath:mapper/**/*.xml # Mapper.xml文件路径
+
+# JWT配置
+jwt:
+  secret: checkin-system-secret-key-123456 # 密钥(生产环境需更换)
+  expiration: 86400000 # 过期时间(24小时，单位毫秒)
