@@ -56,4 +56,10 @@ public class CheckinRecordController {
             @RequestParam Double longitude) {
         return checkinRecordService.validateCheckinLocation(latitude, longitude);
     }
+
+    // 控制器添加接口（CheckinRecordController）
+    @GetMapping("/stats/{userId}")
+    public Result<?> getCheckinStats(@PathVariable Long userId) {
+        return checkinRecordService.getCheckinStats(userId);
+    }
 }

@@ -107,9 +107,28 @@
             <version>0.11.5</version>
             <scope>runtime</scope>
         </dependency>
+        <!-- Redis 核心依赖（必须） -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+        <!-- 可选：若需连接池优化Redis性能，添加此依赖 -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-pool2</artifactId>
+        </dependency>
+<!--        &lt;!&ndash; 内嵌Redis（开发环境专用，无需手动安装） &ndash;&gt;-->
+<!--        <dependency>-->
+<!--            <groupId>it.ozimov</groupId>-->
+<!--            <artifactId>embedded-redis</artifactId>-->
+<!--            <version>0.7.2</version>-->
+<!--            <scope>compile</scope> &lt;!&ndash; 仅测试/开发环境生效 &ndash;&gt;-->
+<!--        </dependency>-->
+
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.1.0</version>
         </dependency>
     </dependencies>
 

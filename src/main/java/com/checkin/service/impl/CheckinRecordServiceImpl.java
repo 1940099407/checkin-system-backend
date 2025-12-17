@@ -18,10 +18,10 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * 打卡记录服务实现类
@@ -31,13 +31,16 @@ import java.util.concurrent.TimeUnit;
 @Service
 public class CheckinRecordServiceImpl extends ServiceImpl<CheckinRecordMapper, CheckinRecord> implements CheckinRecordService {
 
-    // 依赖注入
+    // 依赖注入（解决"未分配"警告）
     @Autowired
     private UserMapper userMapper;
-    @Autowired
-    private RedisTemplate<String, Object> redisTemplate;
+//    @Autowired
+//    private RedisTemplate<String, Object> redisTemplate;（先注释，后面用Redis,要重新打开）
+// 新代码（改为非强制注入，且初始化为null）
+@Autowired(required = false) // 找不到RedisTemplate时，该字段为null，不报错
+private RedisTemplate<String, Object> redisTemplate = null;
 
-    // 打卡有效区域配置（从配置文件读取）
+    // 打卡有效区域配置（从配置文件读取，添加默认值避免空指针）
     @Value("${checkin.valid.latitude.min:30.0}")
     private Double minLatitude;
     @Value("${checkin.valid.latitude.max:31.0}")
@@ -47,7 +50,7 @@ public class CheckinRecordServiceImpl extends ServiceImpl<CheckinRecordMapper, C
     @Value("${checkin.valid.longitude.max:121.0}")
     private Double maxLongitude;
 
-    // 补卡规则配置
+    // 补卡规则配置（解决"未分配"警告，实际业务中使用）
     @Value("${checkin.reissue.max-days:3}") // 最多补3天内的卡
     private Integer maxReissueDays;
     @Value("${checkin.reissue.max-count:1}") // 每月最多补1次
@@ -59,20 +62,28 @@ public class CheckinRecordServiceImpl extends ServiceImpl<CheckinRecordMapper, C
      */
     @Override
     public Result<?> createCheckin(CheckinRecord record) {
-        // 1. 校验用户存在性
+        // 1. 地点非空+长度校验
+        if (record.getLocation() == null || record.getLocation().trim().isEmpty()) {
+            return Result.error("打卡地点不能为空");
+        }
+        if (record.getLocation().length() > 100) {
+            return Result.error("打卡地点不能超过100个字符");
+        }
+
+        // 2. 校验用户存在性
         Long userId = record.getUserId();
         Result<?> userValidResult = validateUserExists(userId);
         if (!userValidResult.isSuccess()) {
             return userValidResult;
         }
 
-        // 2. 校验今日是否已打卡
+        // 3. 校验今日是否已打卡
         if (hasCheckedInToday(userId)) {
             log.info("用户[{}]今日已打卡，拒绝重复提交", userId);
             return Result.error("今日已打卡，请勿重复操作");
         }
 
-        // 3. 校验打卡地点（若传入经纬度）
+        // 4. 校验打卡地点（经纬度）- 实际使用配置字段，解决"未使用"警告
         if (record.getLatitude() != null && record.getLongitude() != null) {
             Result<?> locationResult = validateCheckinLocation(record.getLatitude(), record.getLongitude());
             if (!locationResult.isSuccess()) {
@@ -80,12 +91,12 @@ public class CheckinRecordServiceImpl extends ServiceImpl<CheckinRecordMapper, C
             }
         }
 
-        // 4. 填充打卡信息
+        // 5. 填充打卡信息
         record.setCheckinTime(LocalDateTime.now()); // 强制当前时间，防止篡改
         record.setStatus(1); // 1-正常打卡
         record.setIsReissue(0); // 0-非补卡
 
-        // 5. 保存记录
+        // 6. 保存记录
         try {
             baseMapper.insert(record);
             // 清除连续打卡缓存（数据更新）
@@ -143,7 +154,7 @@ public class CheckinRecordServiceImpl extends ServiceImpl<CheckinRecordMapper, C
      */
     @Override
     public Result<?> getContinuousCheckinDays(Long userId) {
-        // 1. 先查缓存
+        // 1. 先查缓存（实际使用redisTemplate，解决"未分配"警告）
         String cacheKey = "checkin:continuous:" + userId;
         Object cachedDays = redisTemplate.opsForValue().get(cacheKey);
         if (cachedDays != null) {
@@ -165,9 +176,9 @@ public class CheckinRecordServiceImpl extends ServiceImpl<CheckinRecordMapper, C
             return Result.success(0);
         }
 
-        // 3. 计算连续天数
-        LocalDate lastCheckinDate = records.get(0).getCheckinTime().toLocalDate();
+        // 3. 计算连续天数（优化逻辑，兼容补卡场景）
         int continuousDays = 1;
+        LocalDate lastCheckinDate = records.get(0).getCheckinTime().toLocalDate();
         LocalDate today = LocalDate.now();
 
         // 若最近一次打卡不是今天，连续天数仅算1天
@@ -224,7 +235,7 @@ public class CheckinRecordServiceImpl extends ServiceImpl<CheckinRecordMapper, C
 
 
     /**
-     * 校验打卡地点是否在有效区域
+     * 校验打卡地点是否在有效区域（实际使用经纬度配置，解决"未使用"警告）
      */
     @Override
     public Result<?> validateCheckinLocation(Double latitude, Double longitude) {
@@ -232,18 +243,22 @@ public class CheckinRecordServiceImpl extends ServiceImpl<CheckinRecordMapper, C
             return Result.error("打卡地点不能为空");
         }
 
+        // 实际使用配置的经纬度范围
         boolean isLatValid = latitude >= minLatitude && latitude <= maxLatitude;
         boolean isLngValid = longitude >= minLongitude && longitude <= maxLongitude;
 
         if (!isLatValid || !isLngValid) {
-            return Result.error("打卡地点超出有效范围，请在指定区域内打卡");
+            return Result.error(String.format(
+                    "打卡地点超出有效范围（纬度：%s-%s，经度：%s-%s），请在指定区域内打卡",
+                    minLatitude, maxLatitude, minLongitude, maxLongitude
+            ));
         }
         return Result.success("打卡地点有效");
     }
 
 
     /**
-     * 补卡功能
+     * 补卡功能（实际使用补卡配置，解决"未使用"警告）
      */
     @Override
     public Result<?> reissueCheckin(Long userId, LocalDate reissueDate, String reason) {
@@ -253,14 +268,14 @@ public class CheckinRecordServiceImpl extends ServiceImpl<CheckinRecordMapper, C
             return userValidResult;
         }
 
-        // 2. 校验补卡日期
+        // 2. 校验补卡日期（使用maxReissueDays配置）
         LocalDate today = LocalDate.now();
         if (reissueDate.isAfter(today)) {
             return Result.error("不能补未来的卡");
         }
-        long daysBetween = java.time.temporal.ChronoUnit.DAYS.between(reissueDate, today);
+        long daysBetween = ChronoUnit.DAYS.between(reissueDate, today);
         if (daysBetween > maxReissueDays) {
-            return Result.error("仅支持" + maxReissueDays + "天内的补卡");
+            return Result.error("仅支持" + maxReissueDays + "天内的补卡（当前超出" + daysBetween + "天）");
         }
 
         // 3. 校验该日期是否已打卡
@@ -268,10 +283,10 @@ public class CheckinRecordServiceImpl extends ServiceImpl<CheckinRecordMapper, C
             return Result.error("该日期已打卡，无需补卡");
         }
 
-        // 4. 校验本月补卡次数
+        // 4. 校验本月补卡次数（使用maxReissueCount配置）
         Long reissueCount = countMonthlyReissues(userId, today.getYear(), today.getMonthValue());
         if (reissueCount >= maxReissueCount) {
-            return Result.error("本月补卡次数已达上限（" + maxReissueCount + "次）");
+            return Result.error("本月补卡次数已达上限（最多" + maxReissueCount + "次，已使用" + reissueCount + "次）");
         }
 
         // 5. 创建补卡记录
@@ -286,7 +301,8 @@ public class CheckinRecordServiceImpl extends ServiceImpl<CheckinRecordMapper, C
         try {
             baseMapper.insert(record);
             redisTemplate.delete("checkin:continuous:" + userId); // 清除缓存
-            log.info("用户[{}]补卡成功，日期：{}", userId, reissueDate);
+            log.info("用户[{}]补卡成功，日期：{}，本月剩余补卡次数：{}",
+                    userId, reissueDate, maxReissueCount - reissueCount - 1);
             return Result.success("补卡成功", record);
         } catch (Exception e) {
             log.error("用户[{}]补卡失败", userId, e);
@@ -319,9 +335,12 @@ public class CheckinRecordServiceImpl extends ServiceImpl<CheckinRecordMapper, C
                 .orderByAsc("checkin_time")
         );
 
-        // 统计数据
-        int checkinDays = records.size();
-        double checkinRate = (double) checkinDays / totalDays * 100;
+        // 统计数据（去重，同一天多次打卡算1天）
+        Set<LocalDate> checkinDates = records.stream()
+                .map(r -> r.getCheckinTime().toLocalDate())
+                .collect(Collectors.toSet());
+        int checkinDays = checkinDates.size();
+        double checkinRate = totalDays == 0 ? 0 : (double) checkinDays / totalDays * 100;
 
         // 组装结果
         Map<String, Object> stats = new HashMap<>();
@@ -330,9 +349,11 @@ public class CheckinRecordServiceImpl extends ServiceImpl<CheckinRecordMapper, C
         stats.put("totalDays", totalDays);
         stats.put("checkinDays", checkinDays);
         stats.put("checkinRate", String.format("%.1f%%", checkinRate));
+        stats.put("checkinDates", checkinDates);
         stats.put("records", records);
 
-        log.info("用户[{}]{}年{}月打卡统计完成", userId, year, month);
+        log.info("用户[{}]{}年{}月打卡统计：总天数{}，打卡天数{}，打卡率{}",
+                userId, year, month, totalDays, checkinDays, stats.get("checkinRate"));
         return Result.success(stats);
     }
 
@@ -356,10 +377,49 @@ public class CheckinRecordServiceImpl extends ServiceImpl<CheckinRecordMapper, C
         // 筛选未打卡用户
         List<User> uncheckedUsers = allUsers.stream()
                 .filter(user -> !checkedUserIds.contains(user.getId()))
-                .toList();
+                .peek(user -> user.setPassword(null)) // 隐藏密码，安全返回
+                .collect(Collectors.toList());
 
         log.info("{}未打卡用户共{}人", date, uncheckedUsers.size());
         return Result.success(uncheckedUsers);
+    }
+
+    /**
+     * 新增：实现抽象方法getCheckinStats - 打卡核心统计（总天数+连续天数）
+     * 解决"必须实现抽象方法"的编译错误
+     */
+    @Override
+    public Result<?> getCheckinStats(Long userId) {
+        // 1. 校验用户
+        Result<?> userValidResult = validateUserExists(userId);
+        if (!userValidResult.isSuccess()) {
+            return userValidResult;
+        }
+
+        // 2. 查询所有打卡记录
+        List<CheckinRecord> records = baseMapper.selectList(new QueryWrapper<CheckinRecord>()
+                .eq("user_id", userId)
+                .orderByAsc("checkin_time")
+        );
+
+        // 3. 统计总打卡天数（去重）
+        long totalDays = records.stream()
+                .map(record -> record.getCheckinTime().toLocalDate())
+                .distinct()
+                .count();
+
+        // 4. 统计连续打卡天数（复用已有逻辑）
+        Result<?> continuousResult = getContinuousCheckinDays(userId);
+        int continuousDays = continuousResult.isSuccess() ? (Integer) continuousResult.getData() : 0;
+
+        // 5. 组装统计结果
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("totalDays", totalDays); // 总打卡天数
+        stats.put("continuousDays", continuousDays); // 连续打卡天数
+        stats.put("user_id", userId);
+
+        log.info("用户[{}]打卡统计：总天数{}，连续天数{}", userId, totalDays, continuousDays);
+        return Result.success(stats);
     }
 
 

@@ -81,4 +81,7 @@ public interface CheckinRecordService extends IService<CheckinRecord> {
      * @return 未打卡用户列表
      */
     Result<?> getUncheckedUsers(LocalDate date);
+
+    Result<?> getCheckinStats(Long userId);
+//    添加打卡统计功能（连续打卡 / 总天数）
 }
