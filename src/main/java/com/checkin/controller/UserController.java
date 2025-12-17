@@ -3,6 +3,7 @@ package com.checkin.controller;
 import com.checkin.entity.User;
 import com.checkin.service.UserService;
 import com.checkin.common.Result;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -18,7 +19,7 @@ public class UserController {
 
     // 注册接口：POST /user/register
     @PostMapping("/register")
-    public Result<?> register(@RequestBody User user) { // @RequestBody接收JSON参数
+    public Result<?> register(@Valid @RequestBody User user) { // @RequestBody接收JSON参数
         return userService.register(user);
     }
 
