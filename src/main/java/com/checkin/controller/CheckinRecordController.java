@@ -34,4 +34,26 @@ public class CheckinRecordController {
     public Result<?> getTodayCheckinStatus(@PathVariable Long userId) {
         return checkinRecordService.getTodayCheckinStatus(userId);
     }
+    // 新增接口：连续打卡天数
+    @GetMapping("/continuous/{userId}")
+    public Result<?> getContinuousCheckinDays(@PathVariable Long userId) {
+        return checkinRecordService.getContinuousCheckinDays(userId);
+    }
+
+    // 新增接口：分页查询打卡记录
+    @GetMapping("/user/{userId}/page")
+    public Result<?> getUserCheckinsByPage(
+            @PathVariable Long userId,
+            @RequestParam(defaultValue = "1") int pageNum,
+            @RequestParam(defaultValue = "10") int pageSize) {
+        return checkinRecordService.getUserCheckinsByPage(userId, pageNum, pageSize);
+    }
+
+    // 新增接口：校验打卡地点（可选，供前端提前验证）
+    @GetMapping("/location/validate")
+    public Result<?> validateLocation(
+            @RequestParam Double latitude,
+            @RequestParam Double longitude) {
+        return checkinRecordService.validateCheckinLocation(latitude, longitude);
+    }
 }
