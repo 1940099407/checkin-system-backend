@@ -6,129 +6,116 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
         <version>3.1.0</version>
-        <relativePath/> <!-- lookup parent from repository -->
+        <relativePath/> <!-- 从仓库查找父依赖 -->
     </parent>
+
     <groupId>com.checkin</groupId>
     <artifactId>checkin-system-backend</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>checkin-system-backend</name>
     <description>学健打卡系统后端</description>
+
     <properties>
         <java.version>17</java.version>
+        <!-- 统一管理第三方依赖版本，避免冲突 -->
+        <mybatis-plus.version>3.5.3.1</mybatis-plus.version>
+        <jjwt.version>0.11.5</jjwt.version>
+        <springdoc.version>2.1.0</springdoc.version>
     </properties>
+
     <dependencies>
-        <!-- Spring Web（核心web依赖，实现接口） -->
+        <!-- ************************ 核心基础依赖 ************************ -->
+        <!-- Spring Web（REST接口核心） -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
-        <!-- MyBatis-Plus（简化数据库操作） -->
+
+        <!-- 显式添加Jakarta Validation API（适配Spring Boot 3.x） -->
         <dependency>
-            <groupId>com.baomidou</groupId>
-            <artifactId>mybatis-plus-boot-starter</artifactId>
-            <version>3.5.3.1</version>
+            <groupId>jakarta.validation</groupId>
+            <artifactId>jakarta.validation-api</artifactId>
+            <version>3.0.2</version> <!-- 与Spring Boot 3.1.0适配的版本 -->
         </dependency>
-        <!-- MySQL驱动（连接数据库） -->
+
+        <!-- 参数校验（jakarta.validation，适配Spring Boot 3.x） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- MySQL驱动（适配Spring Boot 3.x的官方驱动） -->
         <dependency>
             <groupId>com.mysql</groupId>
             <artifactId>mysql-connector-j</artifactId>
             <scope>runtime</scope>
         </dependency>
-        <!-- Lombok（简化实体类代码） -->
+
+        <!-- Lombok（简化代码，由parent管理版本） -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
-            <version>1.18.30</version>
+            <version>1.18.32</version>
             <optional>true</optional>
         </dependency>
-        <!-- 参数校验（接口参数验证） -->
+
+        <!-- ************************ 业务扩展依赖 ************************ -->
+        <!-- MyBatis-Plus（内置mybatis-spring，无需手动加） -->
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-validation</artifactId>
-        </dependency>
-        <!-- 测试依赖（可选） -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-boot-starter</artifactId>
+            <version>${mybatis-plus.version}</version>
         </dependency>
 
-        <!-- 新增mybatis-spring依赖，覆盖低版本 -->
-        <dependency>
-            <groupId>org.mybatis</groupId>
-            <artifactId>mybatis-spring</artifactId>
-            <version>3.0.3</version> <!-- 适配Spring 6.x的稳定版本 -->
-        </dependency>
-
-        <!-- Spring Security (身份认证) -->
+        <!-- Spring Security（身份认证） -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
-        <!-- JWT工具 -->
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-api</artifactId>
-            <version>0.11.5</version>
-        </dependency>
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-impl</artifactId>
-            <version>0.11.5</version>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-jackson</artifactId>
-            <version>0.11.5</version>
-            <scope>runtime</scope>
-        </dependency>
-        <!-- 测试依赖（必须添加） -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope> <!-- 仅在测试环境生效 -->
-        </dependency>
-        <!-- JWT依赖（用于生成和验证令牌） -->
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-api</artifactId>
-            <version>0.11.5</version>
-        </dependency>
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-impl</artifactId>
-            <version>0.11.5</version>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-jackson</artifactId>
-            <version>0.11.5</version>
-            <scope>runtime</scope>
-        </dependency>
-        <!-- Redis 核心依赖（必须） -->
+
+        <!-- Redis（缓存） -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
-        <!-- 可选：若需连接池优化Redis性能，添加此依赖 -->
+
+        <!-- Redis连接池（优化性能） -->
         <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-pool2</artifactId>
         </dependency>
-<!--        &lt;!&ndash; 内嵌Redis（开发环境专用，无需手动安装） &ndash;&gt;-->
-<!--        <dependency>-->
-<!--            <groupId>it.ozimov</groupId>-->
-<!--            <artifactId>embedded-redis</artifactId>-->
-<!--            <version>0.7.2</version>-->
-<!--            <scope>compile</scope> &lt;!&ndash; 仅测试/开发环境生效 &ndash;&gt;-->
-<!--        </dependency>-->
 
+        <!-- JWT（令牌生成/验证） -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>${jjwt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Swagger/OpenAPI（接口文档） -->
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-            <version>2.1.0</version>
+            <version>${springdoc.version}</version>
+        </dependency>
+
+        <!-- ************************ 测试依赖 ************************ -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 
