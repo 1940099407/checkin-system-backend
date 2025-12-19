@@ -11,6 +11,23 @@ spring:
     username: root # 你的MySQL用户名
     password: Crp.1234 # 你的MySQL密码
     driver-class-name: com.mysql.cj.jdbc.Driver
+  # Redis配置（打卡连续天数缓存）
+  redis:
+    host: localhost
+    port: 6379
+    password: ""  # 无密码留空，有密码填实际值
+    lettuce:
+      pool:
+        max-active: 8   # 最大连接数
+        max-idle: 8     # 最大空闲连接
+        min-idle: 2     # 最小空闲连接
+  # 日期格式化（统一前后端日期返回格式）
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+    serialization:
+      write-dates-as-timestamps: false  # 禁用时间戳，返回字符串格式
+
 
 # MyBatis-Plus配置
 mybatis-plus:
@@ -30,3 +47,18 @@ mybatis-plus:
 jwt:
   secret: your256bitSecretKeyForCheckinSystem!@#$%^&*()  # 至少256位（32字符）的密钥
   expiration: 86400000 # 过期时间(24小时，单位毫秒)
+
+
+# 打卡业务自定义配置（按需调整）
+checkin:
+  valid:
+    # 打卡有效经纬度范围（前端定位后校验）
+    latitude:
+      min: 30.0
+      max: 31.0
+    longitude:
+      min: 120.0
+      max: 121.0
+  reissue:
+    max-days: 3    # 补卡最大追溯天数（3天内可补）
+    max-count: 1   # 每月最大补卡次数

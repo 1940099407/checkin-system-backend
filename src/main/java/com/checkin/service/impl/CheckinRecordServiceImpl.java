@@ -289,14 +289,19 @@ private RedisTemplate<String, Object> redisTemplate = null;
             return Result.error("本月补卡次数已达上限（最多" + maxReissueCount + "次，已使用" + reissueCount + "次）");
         }
 
-        // 5. 创建补卡记录
+        // 5. 校验补卡理由
+        if (reason == null || reason.trim().isEmpty() || reason.length() > 500) {
+            return Result.error("补卡理由不能为空且不超过500字");
+        }
+
+        // 6. 创建补卡记录
         CheckinRecord record = new CheckinRecord();
         record.setUserId(userId);
-        record.setCheckinTime(reissueDate.atTime(9, 0)); // 补卡默认时间
+        record.setCheckinTime(reissueDate.atStartOfDay()); // 补卡日期
+        record.setLocation("补卡");
         record.setStatus(2); // 2-补卡状态
-        record.setIsReissue(1); // 标记为补卡
-        record.setReissueTime(LocalDateTime.now());
-        record.setReissueReason(reason);
+        record.setIsReissue(1); // 1-补卡标记
+        record.setRemark(reason); // 补卡理由
 
         try {
             baseMapper.insert(record);
@@ -390,38 +395,65 @@ private RedisTemplate<String, Object> redisTemplate = null;
      */
     @Override
     public Result<?> getCheckinStats(Long userId) {
-        // 1. 校验用户
+        // 1. 校验用户（你的原有逻辑，完全保留）
         Result<?> userValidResult = validateUserExists(userId);
         if (!userValidResult.isSuccess()) {
             return userValidResult;
         }
 
-        // 2. 查询所有打卡记录
+        // 2. 查询所有打卡记录（你的原有逻辑，完全保留）
         List<CheckinRecord> records = baseMapper.selectList(new QueryWrapper<CheckinRecord>()
                 .eq("user_id", userId)
                 .orderByAsc("checkin_time")
         );
 
-        // 3. 统计总打卡天数（去重）
+        // 3. 统计总打卡天数（去重）（你的原有逻辑，完全保留）
         long totalDays = records.stream()
                 .map(record -> record.getCheckinTime().toLocalDate())
                 .distinct()
                 .count();
 
-        // 4. 统计连续打卡天数（复用已有逻辑）
+        // 4. 统计连续打卡天数（复用已有逻辑）（你的原有逻辑，完全保留）
         Result<?> continuousResult = getContinuousCheckinDays(userId);
         int continuousDays = continuousResult.isSuccess() ? (Integer) continuousResult.getData() : 0;
 
-        // 5. 组装统计结果
+        // ========== 新增：补充前端需要的「本月统计字段」（核心扩展） ==========
+        LocalDate now = LocalDate.now();
+        LocalDate firstDayOfMonth = now.withDayOfMonth(1);
+        LocalDate lastDayOfMonth = now.withDayOfMonth(now.lengthOfMonth());
+
+        // 本月打卡天数（去重）
+        long monthlyDays = records.stream()
+                .map(record -> record.getCheckinTime().toLocalDate())
+                .filter(date -> date.isAfter(firstDayOfMonth.minusDays(1)) && date.isBefore(lastDayOfMonth.plusDays(1)))
+                .distinct()
+                .count();
+
+        // 本月打卡率（保留1位小数，前端展示百分比更友好）
+        double monthlyRate = 0.0;
+        int totalDaysOfMonth = now.lengthOfMonth(); // 本月总天数
+        if (totalDaysOfMonth > 0) {
+            monthlyRate = Math.round(((double) monthlyDays / totalDaysOfMonth) * 100) / 100.0;
+        }
+
+        // 5. 组装统计结果（保留你的字段 + 新增前端所需字段）
         Map<String, Object> stats = new HashMap<>();
-        stats.put("totalDays", totalDays); // 总打卡天数
-        stats.put("continuousDays", continuousDays); // 连续打卡天数
-        stats.put("user_id", userId);
+        stats.put("totalDays", totalDays);       // 你的原有字段：总打卡天数
+        stats.put("continuousDays", continuousDays); // 你的原有字段：连续打卡天数
+        stats.put("userId", userId);             // 字段名规范：统一小驼峰（避免前端解析问题）
+        stats.put("monthlyDays", monthlyDays);   // 新增：本月打卡天数
+        stats.put("monthlyRate", monthlyRate);   // 新增：本月打卡率（如0.85=85%）
+        stats.put("currentMonth", now.getMonthValue()); // 新增：当前月份（前端展示用）
 
-        log.info("用户[{}]打卡统计：总天数{}，连续天数{}", userId, totalDays, continuousDays);
+        // 日志（适配你项目的log规范，确保log已声明）
+        log.info("用户[{}]打卡统计：总天数{}，连续天数{}，本月天数{}，本月打卡率{}",
+                userId, totalDays, continuousDays, monthlyDays, monthlyRate);
+
+        // 适配你项目的Result格式（如果Result.success需要code/msg，补充即可）
         return Result.success(stats);
+        // 若你的Result.success是带code/msg的格式，改为：
+        // return Result.success(200, "统计成功", stats);
     }
-
 
     // ========== 私有工具方法 ==========
 

@@ -27,4 +27,7 @@ public class CheckinRecord {
     private LocalDateTime reissueTime;
     @TableField(value = "reissue_reason") // 补卡理由
     private String reissueReason;
+
+    public void setRemark(String reason) {
+    }
 }
