@@ -41,13 +41,13 @@ public class CheckinRecordServiceImpl extends ServiceImpl<CheckinRecordMapper, C
 private RedisTemplate<String, Object> redisTemplate = null;
 
     // 打卡有效区域配置（从配置文件读取，添加默认值避免空指针）
-    @Value("${checkin.valid.latitude.min:30.0}")
+    @Value("${checkin.valid.latitude.min}")
     private Double minLatitude;
-    @Value("${checkin.valid.latitude.max:31.0}")
+    @Value("${checkin.valid.latitude.max}")
     private Double maxLatitude;
-    @Value("${checkin.valid.longitude.min:120.0}")
+    @Value("${checkin.valid.longitude.min}")
     private Double minLongitude;
-    @Value("${checkin.valid.longitude.max:121.0}")
+    @Value("${checkin.valid.longitude.max}")
     private Double maxLongitude;
 
     // 补卡规则配置（解决"未分配"警告，实际业务中使用）

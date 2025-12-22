@@ -1,66 +1,53 @@
 package com.checkin.controller;
 
+import com.checkin.common.Result;
 import com.checkin.entity.User;
 import com.checkin.service.UserService;
-import com.checkin.common.Result;
-import jakarta.validation.Valid;
+import com.checkin.utils.JwtUtils;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.security.core.context.SecurityContextHolder;
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-@RestController // 标记为REST接口控制器
-@RequestMapping("/user") // 统一接口前缀
+
+@Slf4j
+@RestController
+@RequestMapping("/user") // 路径必须是“/user”（配合context-path后实际是/api/user）
+@Tag(name = "用户管理", description = "用户登录、注册接口") // Swagger分类注解（必须加）
 public class UserController {
 
-    @Autowired // 自动注入UserService
+    @Autowired
     private UserService userService;
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+    @Autowired
+    private JwtUtils jwtUtils;
 
-    // 注册接口：POST /user/register
+    // 注册接口：必须加@Operation（Swagger识别接口的关键）
     @PostMapping("/register")
-    public Result<?> register(@Valid @RequestBody User user) { // @RequestBody接收JSON参数
-        return userService.register(user);
+    @Operation(summary = "用户注册", description = "新用户注册，密码自动加密存储")
+    public Result<?> register(
+            @Parameter(description = "注册信息（必填username/password）", required = true)
+            @RequestBody User user) {
+        user.setPassword(passwordEncoder.encode(user.getPassword()));
+        return userService.save(user) ? Result.success("注册成功") : Result.error(500, "注册失败");
     }
 
-    // 登录接口：POST /user/login
+    // 登录接口：必须加@Operation
     @PostMapping("/login")
-    public Result<?> login(@RequestBody User user) { // 从请求体获取username和password
-        return userService.login(user.getUsername(), user.getPassword());
-    }
-
-    @GetMapping("/info")
-    public Result<?> getUserInfo() {
-        // 从SecurityContext获取当前登录用户名
-        String username = SecurityContextHolder.getContext().getAuthentication().getName();
-        User user = userService.getOne(new QueryWrapper<User>().eq("username", username));
-        if (user == null) {
-            return Result.error("用户不存在");
-        }
-        // 隐藏密码，返回安全信息
-        user.setPassword(null);
-        return Result.success(user);
-    }
-
-    @PutMapping("/update")
-    public Result<?> updateUser(@RequestBody User user) {
-        String username = SecurityContextHolder.getContext().getAuthentication().getName();
-        User currentUser = userService.getOne(new QueryWrapper<User>().eq("username", username));
-        if (currentUser == null) {
-            return Result.error("用户不存在");
-        }
-        // 仅允许修改用户名（需查重）和角色（可选，根据业务需求）
-        if (user.getUsername() != null && !user.getUsername().equals(currentUser.getUsername())) {
-            User existing = userService.getOne(new QueryWrapper<User>().eq("username", user.getUsername()));
-            if (existing != null) {
-                return Result.error("用户名已存在");
-            }
-            currentUser.setUsername(user.getUsername());
-        }
-        userService.updateById(currentUser);
-        return Result.success("更新成功");
+    @Operation(summary = "用户登录", description = "登录成功返回JWT令牌")
+    public Result<?> login(
+            @Parameter(description = "登录信息（username/password）", required = true)
+            @RequestBody User user) {
+        User dbUser = userService.getByUsername(user.getUsername());
+        if (dbUser == null) return Result.error(401, "用户名不存在");
+        if (!passwordEncoder.matches(user.getPassword(), dbUser.getPassword()))
+            return Result.error(401, "密码错误");
+        return Result.success(jwtUtils.generateToken(dbUser.getUsername()));
     }
 }

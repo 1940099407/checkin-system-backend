@@ -30,7 +30,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/checkin") // 统一前缀：适配前端对接规范
+@RequestMapping("/checkin") // 统一前缀：适配前端对接规范
 @Validated // 开启方法参数校验（保证@NotNull/@Min生效）
 @Tag(name = "打卡记录管理", description = "打卡创建、查询、统计、地点校验等接口") // Swagger分类注解
 public class CheckinRecordController {

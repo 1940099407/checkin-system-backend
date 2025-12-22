@@ -26,6 +26,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
+        // ========== 核心修改：新增Swagger路径放行逻辑（放在方法最开头） ==========
+        String requestURI = request.getRequestURI();
+        // 判断是否是Swagger相关路径，若是则直接放行，不执行JWT校验
+        if (requestURI.contains("/v3/api-docs") ||
+                requestURI.contains("/swagger-ui") ||
+                requestURI.contains("/swagger-ui.html")) {
+            filterChain.doFilter(request, response);
+            return; // 跳过后续JWT校验逻辑，直接放行
+        }
+
+        // ========== 原有JWT校验逻辑（保留不变） ==========
         try {
             // 从请求头获取令牌
             String authHeader = request.getHeader("Authorization");

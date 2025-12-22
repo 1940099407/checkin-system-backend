@@ -27,6 +27,11 @@ spring:
     time-zone: GMT+8
     serialization:
       write-dates-as-timestamps: false  # 禁用时间戳，返回字符串格式
+  mvc:
+    static-path-pattern: /**  # 允许所有静态资源请求
+  web:
+    resources:
+          static-locations: classpath:/META-INF/resources/,classpath:/resources/,classpath:/static/,classpath:/public/
 
 
 # MyBatis-Plus配置
@@ -54,11 +59,28 @@ checkin:
   valid:
     # 打卡有效经纬度范围（前端定位后校验）
     latitude:
-      min: 30.0
-      max: 31.0
+      min: 22.0
+      max: 24.0
     longitude:
-      min: 120.0
-      max: 121.0
+      min: 112.0
+      max: 115.0
   reissue:
     max-days: 3    # 补卡最大追溯天数（3天内可补）
     max-count: 1   # 每月最大补卡次数
+
+
+# 原有springdoc配置保留，补充以下内容
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs  # 显式指定，配合context-path后实际路径是/api/v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    # 关键：指定Swagger扫描/api前缀下的所有接口（否则识别不到业务接口）
+    urls:
+      - url: /v3/api-docs
+        name: 打卡系统接口文档
+  # 可选：明确扫描/api/**路径的接口，确保SpringDoc识别所有业务接口
+  paths-to-match: /api/**,/user/**,/checkin/** # 扫描/api和/user开头的所有接口
+
+# 补充：解决context-path下静态资源（Swagger UI）映射问题

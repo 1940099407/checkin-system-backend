@@ -1,6 +1,7 @@
+// com.checkin.service.impl.UserServiceImpl.java
 package com.checkin.service.impl;
 
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.checkin.common.Result;
 import com.checkin.entity.User;
@@ -11,67 +12,53 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
-import java.util.HashMap;
-
 @Service
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
-
     @Autowired
-    private JwtUtils jwtUtils; // 注意变量名拼写正确
+    private JwtUtils jwtUtils;
 
+
+    // 1. 实现register方法（用户注册）
     @Override
     public Result<?> register(User user) {
-        // 1. 检查用户名是否已存在
-        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("username", user.getUsername());
-        User existingUser = baseMapper.selectOne(queryWrapper);
-        if (existingUser != null) {
-            return Result.error("用户名已存在"); // 修正参数格式
+        // 密码加密
+        user.setPassword(passwordEncoder.encode(user.getPassword()));
+        // 保存用户到数据库
+        boolean saveSuccess = this.save(user);
+        if (saveSuccess) {
+            return Result.success("注册成功");
         }
-
-        // 2. 密码加密
-        String encodedPassword = passwordEncoder.encode(user.getPassword());
-        user.setPassword(encodedPassword);
-
-        // 3. 设置默认角色(0-普通用户)和创建时间
-        user.setRole(0);
-        user.setCreateTime(LocalDateTime.now());
-
-        // 4. 保存用户
-        baseMapper.insert(user);
-        return Result.success("注册成功");
+        return Result.error(500, "注册失败");
     }
 
+
+    // 2. 实现login方法（用户登录，返回JWT令牌）
     @Override
     public Result<?> login(String username, String password) {
-        // 1. 查找用户
-        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("username", username); // 简化写法，无需column参数
-        User user = baseMapper.selectOne(queryWrapper);
+        // ① 根据用户名查询用户
+        User user = this.getByUsername(username);
         if (user == null) {
-            return Result.error("用户名不存在"); // 修正参数格式
+            return Result.error(401, "用户名不存在");
         }
-
-        // 2. 验证密码（解开注释时需确保passwordEncoder正确注入）
+        // ② 验证密码是否匹配
         if (!passwordEncoder.matches(password, user.getPassword())) {
-            return Result.error("密码错误"); // 修正参数格式
+            return Result.error(401, "密码错误");
         }
-
-        // 3. 生成JWT令牌（修正String大小写和jwtUtils拼写）
+        // ③ 生成JWT令牌
         String token = jwtUtils.generateToken(username);
+        return Result.success(token);
+    }
 
-        // 4. 返回用户信息和令牌
-        return Result.success("登录成功", new HashMap<String, Object>() {{
-            put("token", token);
-            put("user", new HashMap<String, Object>() {{
-                put("id", user.getId());
-                put("username", user.getUsername());
-                put("role", user.getRole());
-            }});
-        }});
+
+    // 3. 实现getByUsername方法（根据用户名查询用户）
+    @Override
+    public User getByUsername(String username) {
+        LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(User::getUsername, username);
+        // 调用MyBatis-Plus的getOne查询单条记录
+        return this.getOne(queryWrapper);
     }
 }

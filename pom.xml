@@ -89,26 +89,27 @@
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-api</artifactId>
-            <version>${jjwt.version}</version>
+            <version>0.11.5</version>
         </dependency>
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-impl</artifactId>
-            <version>${jjwt.version}</version>
+            <version>0.11.5</version>
             <scope>runtime</scope>
         </dependency>
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-jackson</artifactId>
-            <version>${jjwt.version}</version>
+            <version>0.11.5</version>
             <scope>runtime</scope>
         </dependency>
 
         <!-- Swagger/OpenAPI（接口文档） -->
+        <!-- 仅保留这一个Swagger相关依赖，其他Swagger/Springfox依赖全部删除 -->
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-            <version>${springdoc.version}</version>
+            <version>2.2.0</version> <!-- 适配Spring Boot 3.x的稳定版本 -->
         </dependency>
 
         <!-- ************************ 测试依赖 ************************ -->
