@@ -31,16 +31,15 @@ import java.util.stream.Collectors;
 @Service
 public class CheckinRecordServiceImpl extends ServiceImpl<CheckinRecordMapper, CheckinRecord> implements CheckinRecordService {
 
-    // 依赖注入（解决"未分配"警告）
+    // 依赖注入
     @Autowired
     private UserMapper userMapper;
-//    @Autowired
-//    private RedisTemplate<String, Object> redisTemplate;（先注释，后面用Redis,要重新打开）
-// 新代码（改为非强制注入，且初始化为null）
-@Autowired(required = false) // 找不到RedisTemplate时，该字段为null，不报错
-private RedisTemplate<String, Object> redisTemplate = null;
 
-    // 打卡有效区域配置（从配置文件读取，添加默认值避免空指针）
+    // RedisTemplate非强制注入，避免无Redis时启动失败
+    @Autowired(required = false)
+    private RedisTemplate<String, Object> redisTemplate;
+
+    // 打卡有效区域配置（从配置文件读取）
     @Value("${checkin.valid.latitude.min}")
     private Double minLatitude;
     @Value("${checkin.valid.latitude.max}")
@@ -50,7 +49,7 @@ private RedisTemplate<String, Object> redisTemplate = null;
     @Value("${checkin.valid.longitude.max}")
     private Double maxLongitude;
 
-    // 补卡规则配置（解决"未分配"警告，实际业务中使用）
+    // 补卡规则配置
     @Value("${checkin.reissue.max-days:3}") // 最多补3天内的卡
     private Integer maxReissueDays;
     @Value("${checkin.reissue.max-count:1}") // 每月最多补1次
@@ -83,7 +82,7 @@ private RedisTemplate<String, Object> redisTemplate = null;
             return Result.error("今日已打卡，请勿重复操作");
         }
 
-        // 4. 校验打卡地点（经纬度）- 实际使用配置字段，解决"未使用"警告
+        // 4. 校验打卡地点（经纬度）
         if (record.getLatitude() != null && record.getLongitude() != null) {
             Result<?> locationResult = validateCheckinLocation(record.getLatitude(), record.getLongitude());
             if (!locationResult.isSuccess()) {
@@ -99,8 +98,13 @@ private RedisTemplate<String, Object> redisTemplate = null;
         // 6. 保存记录
         try {
             baseMapper.insert(record);
-            // 清除连续打卡缓存（数据更新）
-            redisTemplate.delete("checkin:continuous:" + userId);
+            // 清除连续打卡缓存（添加Redis空指针保护）
+            if (redisTemplate != null) {
+                redisTemplate.delete("checkin:continuous:" + userId);
+                log.debug("用户[{}]的连续打卡缓存已清除", userId);
+            } else {
+                log.warn("RedisTemplate未注入，跳过缓存清除操作");
+            }
             log.info("用户[{}]打卡成功，记录ID:{}", userId, record.getId());
             return Result.success("打卡成功", record);
         } catch (Exception e) {
@@ -154,9 +158,12 @@ private RedisTemplate<String, Object> redisTemplate = null;
      */
     @Override
     public Result<?> getContinuousCheckinDays(Long userId) {
-        // 1. 先查缓存（实际使用redisTemplate，解决"未分配"警告）
+        // 1. 先查缓存（添加Redis空指针保护）
         String cacheKey = "checkin:continuous:" + userId;
-        Object cachedDays = redisTemplate.opsForValue().get(cacheKey);
+        Object cachedDays = null;
+        if (redisTemplate != null) {
+            cachedDays = redisTemplate.opsForValue().get(cacheKey);
+        }
         if (cachedDays != null) {
             return Result.success(cachedDays);
         }
@@ -172,7 +179,10 @@ private RedisTemplate<String, Object> redisTemplate = null;
                 .orderByDesc("checkin_time")
         );
         if (records.isEmpty()) {
-            redisTemplate.opsForValue().set(cacheKey, 0, 2, TimeUnit.HOURS);
+            // 缓存结果（添加Redis空指针保护）
+            if (redisTemplate != null) {
+                redisTemplate.opsForValue().set(cacheKey, 0, 2, TimeUnit.HOURS);
+            }
             return Result.success(0);
         }
 
@@ -183,7 +193,9 @@ private RedisTemplate<String, Object> redisTemplate = null;
 
         // 若最近一次打卡不是今天，连续天数仅算1天
         if (!lastCheckinDate.isEqual(today)) {
-            redisTemplate.opsForValue().set(cacheKey, continuousDays, 2, TimeUnit.HOURS);
+            if (redisTemplate != null) {
+                redisTemplate.opsForValue().set(cacheKey, continuousDays, 2, TimeUnit.HOURS);
+            }
             return Result.success(continuousDays);
         }
 
@@ -200,8 +212,10 @@ private RedisTemplate<String, Object> redisTemplate = null;
             }
         }
 
-        // 4. 缓存结果（有效期2小时）
-        redisTemplate.opsForValue().set(cacheKey, continuousDays, 2, TimeUnit.HOURS);
+        // 4. 缓存结果（有效期2小时，添加Redis空指针保护）
+        if (redisTemplate != null) {
+            redisTemplate.opsForValue().set(cacheKey, continuousDays, 2, TimeUnit.HOURS);
+        }
         log.info("用户[{}]连续打卡天数：{}（已缓存）", userId, continuousDays);
         return Result.success(continuousDays);
     }
@@ -235,7 +249,7 @@ private RedisTemplate<String, Object> redisTemplate = null;
 
 
     /**
-     * 校验打卡地点是否在有效区域（实际使用经纬度配置，解决"未使用"警告）
+     * 校验打卡地点是否在有效区域
      */
     @Override
     public Result<?> validateCheckinLocation(Double latitude, Double longitude) {
@@ -243,7 +257,7 @@ private RedisTemplate<String, Object> redisTemplate = null;
             return Result.error("打卡地点不能为空");
         }
 
-        // 实际使用配置的经纬度范围
+        // 校验经纬度范围
         boolean isLatValid = latitude >= minLatitude && latitude <= maxLatitude;
         boolean isLngValid = longitude >= minLongitude && longitude <= maxLongitude;
 
@@ -258,7 +272,7 @@ private RedisTemplate<String, Object> redisTemplate = null;
 
 
     /**
-     * 补卡功能（实际使用补卡配置，解决"未使用"警告）
+     * 补卡功能
      */
     @Override
     public Result<?> reissueCheckin(Long userId, LocalDate reissueDate, String reason) {
@@ -268,7 +282,7 @@ private RedisTemplate<String, Object> redisTemplate = null;
             return userValidResult;
         }
 
-        // 2. 校验补卡日期（使用maxReissueDays配置）
+        // 2. 校验补卡日期
         LocalDate today = LocalDate.now();
         if (reissueDate.isAfter(today)) {
             return Result.error("不能补未来的卡");
@@ -283,7 +297,7 @@ private RedisTemplate<String, Object> redisTemplate = null;
             return Result.error("该日期已打卡，无需补卡");
         }
 
-        // 4. 校验本月补卡次数（使用maxReissueCount配置）
+        // 4. 校验本月补卡次数
         Long reissueCount = countMonthlyReissues(userId, today.getYear(), today.getMonthValue());
         if (reissueCount >= maxReissueCount) {
             return Result.error("本月补卡次数已达上限（最多" + maxReissueCount + "次，已使用" + reissueCount + "次）");
@@ -301,11 +315,18 @@ private RedisTemplate<String, Object> redisTemplate = null;
         record.setLocation("补卡");
         record.setStatus(2); // 2-补卡状态
         record.setIsReissue(1); // 1-补卡标记
-        record.setRemark(reason); // 补卡理由
+        record.setReissueReason(reason); // 修复：使用补卡理由专用字段，而非remark
+        record.setReissueTime(LocalDateTime.now()); // 补充：记录补卡提交时间
 
         try {
             baseMapper.insert(record);
-            redisTemplate.delete("checkin:continuous:" + userId); // 清除缓存
+            // 清除缓存（添加Redis空指针保护）
+            if (redisTemplate != null) {
+                redisTemplate.delete("checkin:continuous:" + userId);
+                log.debug("用户[{}]补卡后，连续打卡缓存已清除", userId);
+            } else {
+                log.warn("RedisTemplate未注入，跳过补卡缓存清除操作");
+            }
             log.info("用户[{}]补卡成功，日期：{}，本月剩余补卡次数：{}",
                     userId, reissueDate, maxReissueCount - reissueCount - 1);
             return Result.success("补卡成功", record);
@@ -390,34 +411,33 @@ private RedisTemplate<String, Object> redisTemplate = null;
     }
 
     /**
-     * 新增：实现抽象方法getCheckinStats - 打卡核心统计（总天数+连续天数）
-     * 解决"必须实现抽象方法"的编译错误
+     * 打卡核心统计（总天数+连续天数+本月统计）
      */
     @Override
     public Result<?> getCheckinStats(Long userId) {
-        // 1. 校验用户（你的原有逻辑，完全保留）
+        // 1. 校验用户
         Result<?> userValidResult = validateUserExists(userId);
         if (!userValidResult.isSuccess()) {
             return userValidResult;
         }
 
-        // 2. 查询所有打卡记录（你的原有逻辑，完全保留）
+        // 2. 查询所有打卡记录
         List<CheckinRecord> records = baseMapper.selectList(new QueryWrapper<CheckinRecord>()
                 .eq("user_id", userId)
                 .orderByAsc("checkin_time")
         );
 
-        // 3. 统计总打卡天数（去重）（你的原有逻辑，完全保留）
+        // 3. 统计总打卡天数（去重）
         long totalDays = records.stream()
                 .map(record -> record.getCheckinTime().toLocalDate())
                 .distinct()
                 .count();
 
-        // 4. 统计连续打卡天数（复用已有逻辑）（你的原有逻辑，完全保留）
+        // 4. 统计连续打卡天数（复用已有逻辑）
         Result<?> continuousResult = getContinuousCheckinDays(userId);
         int continuousDays = continuousResult.isSuccess() ? (Integer) continuousResult.getData() : 0;
 
-        // ========== 新增：补充前端需要的「本月统计字段」（核心扩展） ==========
+        // 5. 本月统计
         LocalDate now = LocalDate.now();
         LocalDate firstDayOfMonth = now.withDayOfMonth(1);
         LocalDate lastDayOfMonth = now.withDayOfMonth(now.lengthOfMonth());
@@ -429,30 +449,26 @@ private RedisTemplate<String, Object> redisTemplate = null;
                 .distinct()
                 .count();
 
-        // 本月打卡率（保留1位小数，前端展示百分比更友好）
+        // 本月打卡率（保留1位小数）
         double monthlyRate = 0.0;
-        int totalDaysOfMonth = now.lengthOfMonth(); // 本月总天数
+        int totalDaysOfMonth = now.lengthOfMonth();
         if (totalDaysOfMonth > 0) {
             monthlyRate = Math.round(((double) monthlyDays / totalDaysOfMonth) * 100) / 100.0;
         }
 
-        // 5. 组装统计结果（保留你的字段 + 新增前端所需字段）
+        // 6. 组装统计结果
         Map<String, Object> stats = new HashMap<>();
-        stats.put("totalDays", totalDays);       // 你的原有字段：总打卡天数
-        stats.put("continuousDays", continuousDays); // 你的原有字段：连续打卡天数
-        stats.put("userId", userId);             // 字段名规范：统一小驼峰（避免前端解析问题）
-        stats.put("monthlyDays", monthlyDays);   // 新增：本月打卡天数
-        stats.put("monthlyRate", monthlyRate);   // 新增：本月打卡率（如0.85=85%）
-        stats.put("currentMonth", now.getMonthValue()); // 新增：当前月份（前端展示用）
+        stats.put("totalDays", totalDays);
+        stats.put("continuousDays", continuousDays);
+        stats.put("userId", userId);
+        stats.put("monthlyDays", monthlyDays);
+        stats.put("monthlyRate", monthlyRate);
+        stats.put("currentMonth", now.getMonthValue());
 
-        // 日志（适配你项目的log规范，确保log已声明）
         log.info("用户[{}]打卡统计：总天数{}，连续天数{}，本月天数{}，本月打卡率{}",
                 userId, totalDays, continuousDays, monthlyDays, monthlyRate);
 
-        // 适配你项目的Result格式（如果Result.success需要code/msg，补充即可）
         return Result.success(stats);
-        // 若你的Result.success是带code/msg的格式，改为：
-        // return Result.success(200, "统计成功", stats);
     }
 
     // ========== 私有工具方法 ==========
@@ -503,7 +519,7 @@ private RedisTemplate<String, Object> redisTemplate = null;
     }
 
     /**
-     * 统计当月补卡次数
+     * 统计当月补卡次数（修复：查询补卡提交时间reissue_time）
      */
     private Long countMonthlyReissues(Long userId, int year, int month) {
         LocalDate firstDay = LocalDate.of(year, month, 1);

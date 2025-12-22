@@ -2,6 +2,7 @@ package com.checkin.controller;
 
 // 项目自定义类导入（根据你的实际包路径调整）
 import com.checkin.common.Result;
+import com.checkin.dto.ReissueCheckinDTO; // 需新建该DTO类
 import com.checkin.entity.CheckinRecord;
 import com.checkin.enums.CheckinStatusEnum;
 import com.checkin.exception.BusinessException;
@@ -58,6 +59,14 @@ public class CheckinRecordController {
 
         log.info("【打卡创建】用户打卡记录创建成功，用户ID：{}", record.getUserId());
         return result;
+    }
+
+    // ========== 新增补打卡接口 ==========
+    @PostMapping("/reissue")
+    @Operation(summary = "补打卡记录", description = "补指定日期的卡，需满足：3天内、每月限1次、该日期未打卡")
+    public Result<?> reissueCheckin(@RequestBody ReissueCheckinDTO dto) {
+        // 调用服务层的补卡方法，传入DTO中的参数
+        return checkinRecordService.reissueCheckin(dto.getUserId(), dto.getReissueDate(), dto.getReason());
     }
 
     // 2. 获取用户所有打卡记录（保留@NotNull校验userId）
