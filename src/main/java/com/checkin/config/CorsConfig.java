@@ -1,34 +1,18 @@
-package com.checkin.config;
+package com.checkin.config; // 确保包路径与Spring主类扫描范围一致
 
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import org.springframework.web.filter.CorsFilter;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-@Configuration
-public class CorsConfig {
-
-    @Bean
-    public CorsFilter corsFilter() {
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        CorsConfiguration config = new CorsConfiguration();
-
-        // 允许前端域名（根据实际前端地址修改）
-        config.addAllowedOrigin("http://localhost:5173");
-        config.addAllowedOrigin("http://127.0.0.1:5173");
-
-        // 允许跨域请求的方法
-        config.addAllowedMethod("*");
-        // 允许跨域请求的头信息
-        config.addAllowedHeader("*");
-        // 允许携带cookie
-        config.setAllowCredentials(true);
-        // 预检请求有效期（秒）
-        config.setMaxAge(3600L);
-
-        // 对所有接口生效
-        source.registerCorsConfiguration("/**", config);
-        return new CorsFilter(source);
+@Configuration // 必须加此注解，否则Spring不加载
+public class CorsConfig implements WebMvcConfigurer {
+    @Override
+    public void addCorsMappings(CorsRegistry registry) {
+        registry.addMapping("/**") // 所有接口生效
+                .allowedOriginPatterns("http://localhost:5173") // Spring 2.4+ 用此方法
+                .allowedMethods("GET", "POST", "OPTIONS") // 至少包含OPTIONS（预检请求）
+                .allowedHeaders("*")
+                .allowCredentials(true)
+                .maxAge(3600);
     }
 }

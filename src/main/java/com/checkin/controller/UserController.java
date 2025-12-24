@@ -17,8 +17,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Slf4j
 @RestController
-@RequestMapping("/user") // 路径必须是“/user”（配合context-path后实际是/api/user）
-@Tag(name = "用户管理", description = "用户登录、注册接口") // Swagger分类注解（必须加）
+@RequestMapping("/user")
+@Tag(name = "用户管理", description = "用户登录、注册接口")
 public class UserController {
 
     @Autowired
@@ -28,26 +28,39 @@ public class UserController {
     @Autowired
     private JwtUtils jwtUtils;
 
-    // 注册接口：必须加@Operation（Swagger识别接口的关键）
     @PostMapping("/register")
     @Operation(summary = "用户注册", description = "新用户注册，密码自动加密存储")
     public Result<?> register(
             @Parameter(description = "注册信息（必填username/password）", required = true)
             @RequestBody User user) {
-        user.setPassword(passwordEncoder.encode(user.getPassword()));
-        return userService.save(user) ? Result.success("注册成功") : Result.error(500, "注册失败");
+        try {
+            user.setPassword(passwordEncoder.encode(user.getPassword()));
+            boolean saveSuccess = userService.save(user);
+            return saveSuccess ? Result.success("注册成功") : Result.error(500, "注册失败");
+        } catch (Exception e) {
+            log.error("注册异常", e);
+            return Result.error(500, "注册异常：" + e.getMessage());
+        }
     }
 
-    // 登录接口：必须加@Operation
     @PostMapping("/login")
     @Operation(summary = "用户登录", description = "登录成功返回JWT令牌")
     public Result<?> login(
             @Parameter(description = "登录信息（username/password）", required = true)
             @RequestBody User user) {
-        User dbUser = userService.getByUsername(user.getUsername());
-        if (dbUser == null) return Result.error(401, "用户名不存在");
-        if (!passwordEncoder.matches(user.getPassword(), dbUser.getPassword()))
-            return Result.error(401, "密码错误");
-        return Result.success(jwtUtils.generateToken(dbUser.getUsername()));
+        try {
+            User dbUser = userService.getByUsername(user.getUsername());
+            if (dbUser == null) {
+                return Result.error(401, "用户名不存在");
+            }
+            if (!passwordEncoder.matches(user.getPassword(), dbUser.getPassword())) {
+                return Result.error(401, "密码错误");
+            }
+            String token = jwtUtils.generateToken(dbUser.getUsername());
+            return Result.success("登录成功", token);
+        } catch (Exception e) {
+            log.error("登录异常", e);
+            return Result.error(500, "登录异常：" + e.getMessage());
+        }
     }
 }
