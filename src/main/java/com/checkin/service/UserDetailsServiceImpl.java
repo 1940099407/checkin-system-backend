@@ -29,7 +29,11 @@ public class UserDetailsServiceImpl implements UserDetailsService {
         return org.springframework.security.core.userdetails.User
                 .withUsername(user.getUsername())
                 .password(user.getPassword()) // 数据库中已加密的密码
-                .authorities(Collections.singletonList(() -> "ROLE_" + (user.getRole() == 1 ? "ADMIN" : "USER"))) // 角色权限
+                // 关键修改：适配String类型的role字段，取消数字比较
+                // 方式1（推荐）：直接使用数据库中的role字符串（USER/ADMIN）
+                .authorities(Collections.singletonList(() -> "ROLE_" + user.getRole()))
+                // 方式2（备选）：如果数据库role存数字字符串（如"1"/"0"），用以下逻辑
+                // .authorities(Collections.singletonList(() -> "ROLE_" + ("1".equals(user.getRole()) ? "ADMIN" : "USER")))
                 .build();
     }
 }

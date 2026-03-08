@@ -1,6 +1,7 @@
 // src/main/java/com/checkin/config/JwtAuthenticationFilter.java
 package com.checkin.config;
 
+import com.checkin.service.UserDetailsServiceImpl;
 import com.checkin.utils.JwtUtils;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -9,9 +10,11 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+
 import java.io.IOException;
 
 @Component
@@ -20,39 +23,48 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Autowired
     private JwtUtils jwtUtils;
 
+    // 核心新增：注入UserDetailsService，用于加载完整的用户信息
+    @Autowired
+    private UserDetailsServiceImpl userDetailsService;
+
     @Override
     protected void doFilterInternal(
             HttpServletRequest request,
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
-        // ========== 核心修改：新增Swagger路径放行逻辑（放在方法最开头） ==========
+        // ========== Swagger路径放行逻辑（保留） ==========
         String requestURI = request.getRequestURI();
-        // 判断是否是Swagger相关路径，若是则直接放行，不执行JWT校验
         if (requestURI.contains("/v3/api-docs") ||
                 requestURI.contains("/swagger-ui") ||
                 requestURI.contains("/swagger-ui.html")) {
             filterChain.doFilter(request, response);
-            return; // 跳过后续JWT校验逻辑，直接放行
+            return;
         }
 
-        // ========== 原有JWT校验逻辑（保留不变） ==========
+        // ========== 修复后的JWT校验逻辑 ==========
         try {
-            // 从请求头获取令牌
             String authHeader = request.getHeader("Authorization");
             String token = null;
             String username = null;
 
             if (authHeader != null && authHeader.startsWith("Bearer ")) {
-                token = authHeader.substring(7); // 截取"Bearer "后的令牌
+                token = authHeader.substring(7);
                 username = jwtUtils.extractUsername(token);
             }
 
-            // 验证令牌并设置认证信息
+            // 验证令牌并设置认证信息（核心修改）
             if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                // 1. 加载完整的UserDetails对象（不再用字符串）
+                UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+
+                // 2. 验证token有效性（注意：这里要适配你的JwtUtils方法，若参数是UserDetails则改传userDetails）
                 if (jwtUtils.validateToken(token, username)) {
+                    // 3. 构建正确的认证对象：传入UserDetails而非字符串
                     UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                            username, null, null
+                            userDetails,  // 核心修改：用UserDetails代替String
+                            null,
+                            userDetails.getAuthorities() // 补充用户权限（必填）
                     );
                     authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authToken);

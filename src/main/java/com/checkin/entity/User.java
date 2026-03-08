@@ -23,6 +23,11 @@ public class User {
     @Size(min = 6, message = "密码长度不能少于6位")
     private String password;
 
-    private Integer role;
+    // 关键修改：将Integer改为String，匹配数据库的varchar类型
+    private String role;
+
+    // 补充数据库中存在的avatar字段（必填，否则查询时会报未知列错误）
+    private String avatar;
+
     private LocalDateTime createTime;
 }
