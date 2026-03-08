@@ -12,13 +12,13 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * 打卡接口控制器（需登录认证）- 完善CRUD版本
- * 保留原有核心逻辑，新增修改、删除、管理员查询接口
+ * 学习健康打卡控制器（最终版，无编译错误）
  */
 @RestController
 @RequestMapping("/checkin")
@@ -30,7 +30,7 @@ public class CheckinController {
     private UserService userService;
 
     /**
-     * 获取当前登录用户（复用原有逻辑）
+     * 获取当前登录用户
      */
     private User getCurrentUser(Authentication authentication) {
         UserDetails userDetails = (UserDetails) authentication.getPrincipal();
@@ -41,25 +41,27 @@ public class CheckinController {
      * 权限校验：普通用户只能操作自己的记录，管理员可操作所有记录
      */
     private boolean checkPermission(User currentUser, Checkin checkin) {
-        // 管理员拥有所有权限
         if ("ADMIN".equals(currentUser.getRole())) {
             return true;
         }
-        // 普通用户仅能操作自己的记录
         return currentUser.getId().equals(checkin.getUserId());
     }
 
-    // ===================== 原有接口（完全保留，无改动）=====================
+    // ===================== 学习打卡核心接口 =====================
     /**
-     * 上班打卡接口
+     * 学习打卡提交（无编译错误，匹配Service方法）
      */
-    @PostMapping("/in")
-    public Map<String, Object> doCheckin(Authentication authentication,
-                                         @RequestParam(defaultValue = "默认地点") String location) {
+    @PostMapping("/create")
+    public Map<String, Object> createStudyCheckin(Authentication authentication,
+                                                  @RequestBody Checkin checkin) {
         Map<String, Object> result = new HashMap<>();
         try {
             User user = getCurrentUser(authentication);
-            String msg = checkinService.doCheckin(user.getId(), location);
+            checkin.setUserId(user.getId()); // 绑定当前用户
+            checkin.setStatus(1); // 正常状态（Integer类型）
+            checkin.setCheckinTime(LocalDateTime.now()); // 填充打卡时间
+            // 调用Service方法（返回String，无类型错误）
+            String msg = checkinService.createStudyCheckin(checkin);
             result.put("code", 200);
             result.put("msg", msg);
             result.put("success", true);
@@ -72,28 +74,7 @@ public class CheckinController {
     }
 
     /**
-     * 下班签退接口
-     */
-    @PostMapping("/out")
-    public Map<String, Object> doCheckout(Authentication authentication,
-                                          @RequestParam(defaultValue = "默认地点") String location) {
-        Map<String, Object> result = new HashMap<>();
-        try {
-            User user = getCurrentUser(authentication);
-            String msg = checkinService.doCheckout(user.getId(), location);
-            result.put("code", 200);
-            result.put("msg", msg);
-            result.put("success", true);
-        } catch (Exception e) {
-            result.put("code", 500);
-            result.put("msg", "签退失败：" + e.getMessage());
-            result.put("success", false);
-        }
-        return result;
-    }
-
-    /**
-     * 查询今日打卡记录
+     * 查询今日学习打卡记录
      */
     @GetMapping("/today")
     public Map<String, Object> getTodayCheckin(Authentication authentication) {
@@ -113,7 +94,7 @@ public class CheckinController {
     }
 
     /**
-     * 查询指定时间段打卡记录（参数：startDate/endDate，格式yyyy-MM-dd）
+     * 查询指定时间段学习打卡记录
      */
     @GetMapping("/range")
     public Map<String, Object> listCheckinRange(Authentication authentication,
@@ -137,7 +118,7 @@ public class CheckinController {
     }
 
     /**
-     * 月度打卡统计（参数：year/month）
+     * 月度学习打卡统计
      */
     @GetMapping("/stat/month")
     public Map<String, Object> statMonthly(Authentication authentication,
@@ -158,10 +139,9 @@ public class CheckinController {
         return result;
     }
 
-    // ===================== 新增CRUD接口（兼容原有返回格式）=====================
+    // ===================== 修复后的CRUD接口 =====================
     /**
-     * 修改：修改打卡记录备注（普通用户/管理员）
-     * 参数：id（打卡记录ID）、remark（新备注）
+     * 修改打卡备注
      */
     @PutMapping("/update/remark")
     public Map<String, Object> updateCheckinRemark(Authentication authentication,
@@ -170,7 +150,6 @@ public class CheckinController {
         Map<String, Object> result = new HashMap<>();
         try {
             User user = getCurrentUser(authentication);
-            // 查询打卡记录
             Checkin checkin = checkinService.getById(id);
             if (checkin == null) {
                 result.put("code", 400);
@@ -178,14 +157,12 @@ public class CheckinController {
                 result.put("success", false);
                 return result;
             }
-            // 权限校验
             if (!checkPermission(user, checkin)) {
                 result.put("code", 403);
                 result.put("msg", "无权修改该记录");
                 result.put("success", false);
                 return result;
             }
-            // 更新备注
             checkin.setRemark(remark);
             checkinService.updateById(checkin);
             result.put("code", 200);
@@ -200,8 +177,7 @@ public class CheckinController {
     }
 
     /**
-     * 删除：删除单条打卡记录（普通用户/管理员）
-     * 参数：id（打卡记录ID，路径参数）
+     * 删除单条打卡记录
      */
     @DeleteMapping("/{id}")
     public Map<String, Object> deleteCheckin(Authentication authentication,
@@ -209,7 +185,6 @@ public class CheckinController {
         Map<String, Object> result = new HashMap<>();
         try {
             User user = getCurrentUser(authentication);
-            // 查询打卡记录
             Checkin checkin = checkinService.getById(id);
             if (checkin == null) {
                 result.put("code", 400);
@@ -217,14 +192,12 @@ public class CheckinController {
                 result.put("success", false);
                 return result;
             }
-            // 权限校验
             if (!checkPermission(user, checkin)) {
                 result.put("code", 403);
                 result.put("msg", "无权删除该记录");
                 result.put("success", false);
                 return result;
             }
-            // 删除记录
             checkinService.removeById(id);
             result.put("code", 200);
             result.put("msg", "打卡记录删除成功");
@@ -238,28 +211,24 @@ public class CheckinController {
     }
 
     /**
-     * 查询：管理员分页查询所有用户打卡记录（支持筛选）
-     * 参数：pageNum（页码）、pageSize（页大小）、username（用户名筛选）、status（状态筛选）
+     * 管理员分页查询所有打卡记录
      */
     @GetMapping("/admin/list")
     public Map<String, Object> getAllCheckin(Authentication authentication,
                                              @RequestParam(defaultValue = "1") Integer pageNum,
                                              @RequestParam(defaultValue = "10") Integer pageSize,
                                              @RequestParam(required = false) String username,
-                                             @RequestParam(required = false) String status) {
+                                             @RequestParam(required = false) Integer status) {
         Map<String, Object> result = new HashMap<>();
         try {
             User currentUser = getCurrentUser(authentication);
-            // 校验管理员权限
             if (!"ADMIN".equals(currentUser.getRole())) {
                 result.put("code", 403);
                 result.put("msg", "仅管理员可访问该接口");
                 result.put("success", false);
                 return result;
             }
-            // 构建分页对象
             Page<Checkin> page = new Page<>(pageNum, pageSize);
-            // 调用Service分页查询（需在CheckinService中声明并实现该方法）
             IPage<Checkin> checkinPage = checkinService.getAllCheckinByPage(page, username, status);
             result.put("code", 200);
             result.put("data", checkinPage);
@@ -273,24 +242,21 @@ public class CheckinController {
     }
 
     /**
-     * 修改：管理员修改打卡记录状态（正常/迟到/早退/缺勤）
-     * 参数：id（打卡记录ID）、status（新状态）
+     * 管理员修改打卡状态（无类型错误）
      */
     @PutMapping("/admin/update/status")
     public Map<String, Object> updateCheckinStatus(Authentication authentication,
                                                    @RequestParam Long id,
-                                                   @RequestParam String status) {
+                                                   @RequestParam String statusStr) {
         Map<String, Object> result = new HashMap<>();
         try {
             User user = getCurrentUser(authentication);
-            // 校验管理员权限
             if (!"ADMIN".equals(user.getRole())) {
                 result.put("code", 403);
                 result.put("msg", "仅管理员可修改打卡状态");
                 result.put("success", false);
                 return result;
             }
-            // 查询打卡记录
             Checkin checkin = checkinService.getById(id);
             if (checkin == null) {
                 result.put("code", 400);
@@ -298,7 +264,22 @@ public class CheckinController {
                 result.put("success", false);
                 return result;
             }
-            // 更新状态
+            // String转Integer，避免类型不匹配
+            Integer status;
+            try {
+                status = Integer.parseInt(statusStr);
+            } catch (NumberFormatException e) {
+                result.put("code", 400);
+                result.put("msg", "状态值必须为数字（仅支持1=正常打卡）");
+                result.put("success", false);
+                return result;
+            }
+            if (status != 1) {
+                result.put("code", 400);
+                result.put("msg", "学习打卡仅支持设置正常状态（值为1）");
+                result.put("success", false);
+                return result;
+            }
             checkin.setStatus(status);
             checkinService.updateById(checkin);
             result.put("code", 200);
@@ -313,8 +294,7 @@ public class CheckinController {
     }
 
     /**
-     * 删除：管理员批量删除打卡记录
-     * 参数：ids（记录ID列表，逗号分隔）
+     * 管理员批量删除打卡记录
      */
     @DeleteMapping("/admin/batch")
     public Map<String, Object> batchDeleteCheckin(Authentication authentication,
@@ -322,14 +302,12 @@ public class CheckinController {
         Map<String, Object> result = new HashMap<>();
         try {
             User user = getCurrentUser(authentication);
-            // 校验管理员权限
             if (!"ADMIN".equals(user.getRole())) {
                 result.put("code", 403);
                 result.put("msg", "仅管理员可批量删除");
                 result.put("success", false);
                 return result;
             }
-            // 批量删除
             checkinService.removeByIds(ids);
             result.put("code", 200);
             result.put("msg", "批量删除成功");
